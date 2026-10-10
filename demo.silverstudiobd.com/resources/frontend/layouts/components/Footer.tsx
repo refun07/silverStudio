@@ -30,16 +30,6 @@ import {
 import { useSubscribeMutation } from "../../store/features/api/userApi";
 import { translate } from "../../utils/translate";
 
-const DEMO_ONE_LINKS = [
-  { title: "Home", url: "/" },
-  { title: "Shop", url: "/shops" },
-  { title: "All Products", url: "/products" },
-  { title: "About Us", url: "/pages/about-us" },
-  { title: "Contact Us", url: "/pages/contact-us" },
-  { title: "All Brands", url: "/brands" },
-  { title: "All Sellers", url: "/shops" },
-];
-
 type FooterLink = {
   title: string;
   url: string;
@@ -77,14 +67,8 @@ const Footer = () => {
   const featuredBrandsRes = useGetFeaturedBrandsQuery();
 
   const [email, setEmail] = useState("");
-  const dynamicQuickLinks = normalizeFooterLinks(footerData?.quickLinkPages);
-  const dynamicImportantLinks = normalizeFooterLinks(
-    footerData?.importantLinkPages
-  );
-  const quickLinks = dynamicQuickLinks.length ? dynamicQuickLinks : DEMO_ONE_LINKS;
-  const importantLinks = dynamicImportantLinks.length
-    ? dynamicImportantLinks
-    : DEMO_ONE_LINKS;
+  const quickLinks = normalizeFooterLinks(footerData?.quickLinkPages);
+  const importantLinks = normalizeFooterLinks(footerData?.importantLinkPages);
   const footerEmails = (footerData?.homeFooterEmail || "maininfo@ultraz.com")
     .split(",")
     .map((item: string) => item.trim())
@@ -134,9 +118,7 @@ const Footer = () => {
   const isModernFooter = footerData?.defaultFooter === "footer-two";
   const settingIsEnabled = (value: unknown) =>
     value === "1" || value === 1 || value === true;
-  const footerAddress =
-    footerData?.homeFooterAddress ||
-    "123 Maple Street Springfield, IL 627010 United States of America";
+  const footerAddress = footerData?.homeFooterAddress || "";
   const footerLogo =
     footerData?.homeFooterLogo || window.config.generalSettings.logo;
   const paymentImage = footerData?.homeFooterSecuredPayments;
@@ -510,62 +492,66 @@ const Footer = () => {
                   </button>
                 </form>
               </div>
-              <div className="">
-                <FooterTitle
-                  title={translate("Social Media")}
-                  style={{
-                    color: footerData?.footer_text_color || "#ffffff",
-                  }}
-                />
-                <ul className="mt-7 space-y-[18px] list-disc marker:text-[#d8c5a2] pl-10 whitespace-nowrap text-[13px]">
-                  {quickLinks.map((link, idx) => (
-                    <li key={idx}>
-                      <Link
-                        to={link.url}
-                        className="flex items-center gap-3 transition-all hover:text-[#ff2718] group"
-                        style={{
-                          color: footerData?.footer_text_color || "#ffffff",
-                        }}
-                      >
-                        {link.title}
-                        {idx === 0 ? (
-                          <span className="text-[#d8c5a2] transition group-hover:translate-x-1">
-                            <FaArrowRight />
-                          </span>
-                        ) : null}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div className="">
-                <FooterTitle
-                  title={translate("Important Links")}
-                  style={{
-                    color: footerData?.footer_text_color || "#ffffff",
-                  }}
-                />
-                <ul className="mt-7 space-y-[18px] list-disc marker:text-[#d8c5a2] pl-10 whitespace-nowrap text-[13px]">
-                  {importantLinks.map((link, idx) => (
-                    <li key={idx}>
-                      <Link
-                        to={link.url}
-                        className="flex items-center gap-3 transition-all hover:text-[#ff2718] group"
-                        style={{
-                          color: footerData?.footer_text_color || "#ffffff",
-                        }}
-                      >
-                        {link.title}
-                        {idx === 0 ? (
-                          <span className="text-[#d8c5a2] transition group-hover:translate-x-1">
-                            <FaArrowRight />
-                          </span>
-                        ) : null}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+              {quickLinks.length > 0 && (
+                <div className="">
+                  <FooterTitle
+                    title={translate("Quick Links")}
+                    style={{
+                      color: footerData?.footer_text_color || "#ffffff",
+                    }}
+                  />
+                  <ul className="mt-7 space-y-[18px] list-disc marker:text-[#d8c5a2] pl-10 whitespace-nowrap text-[13px]">
+                    {quickLinks.map((link, idx) => (
+                      <li key={idx}>
+                        <Link
+                          to={link.url}
+                          className="flex items-center gap-3 transition-all hover:text-[#ff2718] group"
+                          style={{
+                            color: footerData?.footer_text_color || "#ffffff",
+                          }}
+                        >
+                          {link.title}
+                          {idx === 0 ? (
+                            <span className="text-[#d8c5a2] transition group-hover:translate-x-1">
+                              <FaArrowRight />
+                            </span>
+                          ) : null}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {importantLinks.length > 0 && (
+                <div className="">
+                  <FooterTitle
+                    title={translate("Important Links")}
+                    style={{
+                      color: footerData?.footer_text_color || "#ffffff",
+                    }}
+                  />
+                  <ul className="mt-7 space-y-[18px] list-disc marker:text-[#d8c5a2] pl-10 whitespace-nowrap text-[13px]">
+                    {importantLinks.map((link, idx) => (
+                      <li key={idx}>
+                        <Link
+                          to={link.url}
+                          className="flex items-center gap-3 transition-all hover:text-[#ff2718] group"
+                          style={{
+                            color: footerData?.footer_text_color || "#ffffff",
+                          }}
+                        >
+                          {link.title}
+                          {idx === 0 ? (
+                            <span className="text-[#d8c5a2] transition group-hover:translate-x-1">
+                              <FaArrowRight />
+                            </span>
+                          ) : null}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <div className="">
                 <FooterTitle
                   title={translate("Contact Us")}
@@ -604,23 +590,25 @@ const Footer = () => {
                       </a>
                     </li>
                   ))}
-                  <li>
-                    <a
-                      href={`https://www.google.com/search?q=${encodeURIComponent(
-                        footerAddress
-                      )}&oq=${encodeURIComponent(footerAddress)}`}
-                      target="_blank"
-                      referrerPolicy="no-referrer"
-                      className="block max-w-[300px] transition-all hover:text-[#ff2718]"
-                      style={{
-                        color: footerData?.footer_text_color || "#ffffff",
-                      }}
-                    >
-                      <span className="whitespace-normal break-words">
-                        {footerAddress}
-                      </span>
-                    </a>
-                  </li>
+                  {footerAddress && (
+                    <li>
+                      <a
+                        href={`https://www.google.com/search?q=${encodeURIComponent(
+                          footerAddress
+                        )}&oq=${encodeURIComponent(footerAddress)}`}
+                        target="_blank"
+                        referrerPolicy="no-referrer"
+                        className="block max-w-[300px] transition-all hover:text-[#ff2718]"
+                        style={{
+                          color: footerData?.footer_text_color || "#ffffff",
+                        }}
+                      >
+                        <span className="whitespace-normal break-words">
+                          {footerAddress}
+                        </span>
+                      </a>
+                    </li>
+                  )}
                 </ul>
 
                 {/* Google Maps Section */}

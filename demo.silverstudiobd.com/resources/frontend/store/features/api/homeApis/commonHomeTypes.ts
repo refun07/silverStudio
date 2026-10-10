@@ -157,7 +157,7 @@ export interface IGetFooter {
     showHomePinterestLink: string;
     homeFooterPinterestLink: string;
     quickLinkPages: QuickLinkPage[];
-    importantLinkPages: QuickLinkPage[];
+    importantLinkPages?: QuickLinkPage[];
     topCategories: TopCategory[];
     popularTags: string[];
     defaultPages: DefaultPage[];

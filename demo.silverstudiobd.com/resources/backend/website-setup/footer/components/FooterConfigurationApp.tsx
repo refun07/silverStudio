@@ -491,9 +491,10 @@ const FooterConfigurationApp: React.FC<FooterConfigurationAppProps> = ({
             };
 
             const response = await fetch(`${apiPrefix}/footer/config`, {
-                method: 'POST',
+                method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Accept': 'application/json',
                     'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content || ''
                 },
                 body: JSON.stringify(config)
