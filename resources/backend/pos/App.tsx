@@ -1,5 +1,6 @@
 import React, {
     ChangeEvent,
+    KeyboardEvent,
     useCallback,
     useEffect,
     useMemo,
@@ -7,8 +8,10 @@ import React, {
     useState,
 } from 'react';
 import toast from 'react-hot-toast';
-import { FaTrashAlt } from 'react-icons/fa';
+import { BiExitFullscreen, BiExpand } from 'react-icons/bi';
+import { FaListUl, FaThLarge, FaTrashAlt } from 'react-icons/fa';
 import { FiSettings, FiEdit2 } from 'react-icons/fi';
+import { IoHandRightOutline } from 'react-icons/io5';
 import { LiaTimesSolid } from 'react-icons/lia';
 import { AiOutlinePlus } from 'react-icons/ai';
 import { Drawer } from 'vaul';
@@ -31,10 +34,10 @@ import { translate } from '../react/utils/translate';
 import ProductCard from './components/ProductCard';
 import InvoiceModal from './components/InvoiceModal';
 import CustomerModal from './popup/CustomerModal';
-import CustomerSearchModal from './popup/CustomerSearchModal';
+import HoldOrdersModal from './popup/HoldOrdersModal';
 import ModalWrapper from './popup/ModalWrapper';
+import OrderHistoryModal from './popup/OrderHistoryModal';
 import SubmitOrderModal from './popup/SubmitOrderModal';
-import { useScrollIntoViewOnFocus } from './hooks/useScrollIntoViewOnFocus';
 import {
     IAddress,
     ICustomer,
@@ -44,18 +47,25 @@ import {
     IPosProductVariation,
 } from './types';
 import {
-    getAddresses,
     getCustomerFilter,
     getPosFilterData,
     getPosProductsVariations,
+    holdOrder,
     addToPosCartGroup,
     updatePosCartItem,
+    getAddresses,
 } from './utils/actions';
 import {
     getRemainingStockForVariation,
     getStockBadgeMeta,
     getStockForWarehouse,
 } from './utils/helpers';
+
+type ScanFeedback = {
+    product: IPosProductVariation | null;
+    message: string;
+    tone: 'ok' | 'low' | 'out' | 'error';
+};
 
 type ProductViewMode = 'product-first' | 'classic';
 
@@ -66,56 +76,7 @@ type ProductGroup = {
     variations: IPosProductVariation[];
 };
 
-const PRODUCT_FIRST_VARIATION_LIMIT = 30;
-
-const uniqueCustomersById = (customers: ICustomer[] = []) => {
-    const uniqueCustomers = new Map<number, ICustomer>();
-
-    customers.forEach((customer) => {
-        if (!uniqueCustomers.has(customer.id)) {
-            uniqueCustomers.set(customer.id, customer);
-        }
-    });
-
-    return Array.from(uniqueCustomers.values());
-};
-
-const getVariationDiscountPercent = (variation: IPosProductVariation): number => {
-    const regularPrice = Number(variation.basePrice) || 0;
-    const offerPrice = Number(variation.discountedBasePrice) || 0;
-
-    if (regularPrice <= 0 || offerPrice >= regularPrice) {
-        return 0;
-    }
-
-    return Math.round(((regularPrice - offerPrice) / regularPrice) * 100);
-};
-
-const getProductGroupDisplayVariation = (
-    productGroup: ProductGroup,
-): IPosProductVariation | null => {
-    if (!productGroup.variations.length) {
-        return null;
-    }
-
-    return [...productGroup.variations].sort(
-        (a, b) => Number(a.discountedBasePrice) - Number(b.discountedBasePrice),
-    )[0];
-};
-
-const getDefaultWarehouseId = (
-    warehouses: IFilterData['warehouses'],
-): number | null => {
-    if (warehouses.length === 0) {
-        return null;
-    }
-
-    const defaultWarehouse = warehouses.find(
-        (warehouse) => warehouse.name.toLowerCase() === 'default',
-    );
-
-    return defaultWarehouse?.id ?? warehouses[0].id;
-};
+const PRODUCT_FIRST_VARIATION_LIMIT = 80;
 
 const App = () => {
     const [searchParams, setSearchParams] = useSearchParams();
@@ -148,43 +109,32 @@ const App = () => {
     const [pendingCustomerId, setPendingCustomerId] = useState<number | null>(null);
     const hasAutoSelectedCustomer = useRef(false);
 
-    const [discount, setDiscount] = useState<string | number>('');
-    const [shipping, setShipping] = useState<string | number>('');
-    const [tax, setTax] = useState<string | number>('');
-
-    const handleNumericChange = (
-        value: string,
-        setter: React.Dispatch<React.SetStateAction<string | number>>,
-    ) => {
-        if (value === '' || /^\d*\.?\d*$/.test(value)) {
-            setter(value);
-        }
-    };
-
-    const handleNumericBlur = (
-        value: string | number,
-        setter: React.Dispatch<React.SetStateAction<string | number>>,
-    ) => {
-        setter(Number(value) || '');
-    };
+    const [discount, setDiscount] = useState<number | ''>('');
+    const [shipping, setShipping] = useState<number | ''>('');
+    const [tax, setTax] = useState<number | ''>('');
 
     const [showInvoiceModal, setShowInvoiceModal] = useState(false);
     const [currentInvoiceData, setCurrentInvoiceData] = useState<any>(null);
+    const [isFullscreen, setIsFullscreen] = useState(false);
     const [searchDraft, setSearchDraft] = useState('');
-    const stockOverride = false;
-    const productViewMode: ProductViewMode = 'product-first';
+    const [scanQuery, setScanQuery] = useState('');
+    const [scanFeedback, setScanFeedback] = useState<ScanFeedback | null>(null);
+    const [stockOverride, setStockOverride] = useState(false);
+    const [productViewMode, setProductViewMode] =
+        useState<ProductViewMode>('product-first');
     const [selectedProductGroup, setSelectedProductGroup] =
         useState<ProductGroup | null>(null);
 
     const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
-    const [isCustomerSearchModalOpen, setIsCustomerSearchModalOpen] = useState(false);
-    const [editingCustomer, setEditingCustomer] = useState<ICustomer | undefined>(undefined);
+    const [customerModalViewMode, setCustomerModalViewMode] = useState<'select' | 'manage' | 'address-picker'>('select');
+    const [modalAddresses, setModalAddresses] = useState<IAddress[]>([]);
+    const [modalCustomer, setModalCustomer] = useState<ICustomer | null>(null);
+    const [isAddingNewCustomer, setIsAddingNewCustomer] = useState(false);
     const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
     const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
-    const cartBodyRef = useRef<HTMLDivElement>(null);
-    useScrollIntoViewOnFocus(cartBodyRef, isMobile && isCartDrawerOpen);
 
+    const canOverrideStock = Boolean(window.config?.canOverrideStock);
     const selectedWarehouseId = filters.warehouseId
         ? Number(filters.warehouseId)
         : null;
@@ -209,10 +159,14 @@ const App = () => {
 
         return Array.from(groupedProducts.values());
     }, [posProducts]);
-    const customerOptions = useMemo(
-        () => uniqueCustomersById(customerFilters || []),
-        [customerFilters],
-    );
+
+    useEffect(() => {
+        const handleFullscreenChange = () => {
+            setIsFullscreen(!!document.fullscreenElement);
+        };
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    }, []);
 
     useEffect(() => {
         const checkMobile = () => setIsMobile(window.innerWidth < 1024);
@@ -228,6 +182,12 @@ const App = () => {
             try {
                 const parsed = JSON.parse(saved);
                 const newParams = new URLSearchParams(searchParams);
+                if (parsed.warehouseId && !newParams.get('warehouseId')) {
+                    newParams.set('warehouseId', parsed.warehouseId);
+                }
+                if (parsed.brandId && !newParams.get('brandId')) {
+                    newParams.set('brandId', parsed.brandId);
+                }
                 if (parsed.categoryId && !newParams.get('categoryId')) {
                     newParams.set('categoryId', parsed.categoryId);
                 }
@@ -243,39 +203,22 @@ const App = () => {
     useEffect(() => {
         if (!isMobile) return;
         localStorage.setItem('pos_mobile_filters', JSON.stringify({
+            warehouseId: filters.warehouseId,
+            brandId: filters.brandId,
             categoryId: filters.categoryId,
         }));
     }, [filters, isMobile]);
 
     useEffect(() => {
         getPosFilterData().then((data) => setFilterData(data));
-        getCustomerFilter().then((data) =>
-            setCustomerFilters(uniqueCustomersById(data)),
-        );
+        getCustomerFilter().then((data) => setCustomerFilters(data));
     }, []);
 
     useEffect(() => {
-        if (!searchParams.get('brandId')) {
-            return;
+        if (!canOverrideStock) {
+            setStockOverride(false);
         }
-
-        const nextSearchParams = new URLSearchParams(searchParams);
-        nextSearchParams.delete('brandId');
-        nextSearchParams.set('page', '1');
-        setSearchParams(nextSearchParams, { replace: true });
-    }, [searchParams, setSearchParams]);
-
-    useEffect(() => {
-        const defaultWarehouseId = getDefaultWarehouseId(filterData.warehouses);
-        if (!defaultWarehouseId || searchParams.get('warehouseId')) {
-            return;
-        }
-
-        const nextSearchParams = new URLSearchParams(searchParams);
-        nextSearchParams.set('page', '1');
-        nextSearchParams.set('warehouseId', String(defaultWarehouseId));
-        setSearchParams(nextSearchParams, { replace: true });
-    }, [filterData.warehouses, searchParams, setSearchParams]);
+    }, [canOverrideStock]);
 
     // Handle abandoned cart transfer - load cart from query params
     useEffect(() => {
@@ -302,24 +245,20 @@ const App = () => {
     // Auto-select customer when both customerFilters and pendingCustomerId are available
     useEffect(() => {
         if (
-            customerOptions.length > 0 &&
+            customerFilters &&
             pendingCustomerId !== null &&
             !hasAutoSelectedCustomer.current
         ) {
-            const matchedCustomer = customerOptions.find(
+            const matchedCustomer = customerFilters.find(
                 (c) => c.id === pendingCustomerId,
             );
             if (matchedCustomer) {
-                getAddresses(matchedCustomer.id)
-                    .then((addresses) =>
-                        handleCustomerSuccess(matchedCustomer, addresses[0]),
-                    )
-                    .catch(() => handleCustomerSuccess(matchedCustomer));
+                setCustomer(matchedCustomer);
                 hasAutoSelectedCustomer.current = true;
                 setPendingCustomerId(null);
             }
         }
-    }, [customerOptions, pendingCustomerId]);
+    }, [customerFilters, pendingCustomerId]);
 
     const loadAbandonedCartData = async (posCartGroupId: number) => {
         try {
@@ -417,14 +356,9 @@ const App = () => {
         const timerId = setTimeout(() => {
             const nextSearchParams = new URLSearchParams(searchParams);
             const normalizedSearch = searchDraft.trim();
-            const currentSearch = searchParams.get('searchKey')?.trim() || '';
-
-            if (normalizedSearch === currentSearch) {
-                return;
-            }
 
             if (normalizedSearch) {
-                nextSearchParams.set('searchKey', normalizedSearch);
+                nextSearchParams.set('searchKey', searchDraft);
             } else {
                 nextSearchParams.delete('searchKey');
             }
@@ -450,6 +384,40 @@ const App = () => {
 
         nextSearchParams.set('page', '1');
         setSearchParams(nextSearchParams);
+    };
+
+    const handleProductViewModeToggle = () => {
+        setSelectedProductGroup(null);
+        setProductViewMode((currentMode) =>
+            currentMode === 'product-first' ? 'classic' : 'product-first',
+        );
+
+        const nextSearchParams = new URLSearchParams(searchParams);
+        if (nextSearchParams.get('page') !== '1') {
+            nextSearchParams.set('page', '1');
+            setSearchParams(nextSearchParams);
+        }
+    };
+
+    const findMatchedProduct = (
+        products: IPosProductVariation[],
+        query: string,
+    ) => {
+        const normalizedQuery = query.trim().toLowerCase();
+
+        return (
+            products.find(
+                (product) =>
+                    product.sku?.toLowerCase() === normalizedQuery ||
+                    product.code?.toLowerCase() === normalizedQuery,
+            ) ||
+            products.find(
+                (product) =>
+                    product.product.name?.toLowerCase() === normalizedQuery,
+            ) ||
+            products[0] ||
+            null
+        );
     };
 
     const addProductToCart = async (product: IPosProductVariation) => {
@@ -538,21 +506,50 @@ const App = () => {
         }
     };
 
+    const handleHoldOrder = () => {
+        if (!posCartGroup) return;
+
+        console.log(posCartGroup);
+
+        try {
+            holdOrder(posCartGroup?.posCartGroupId);
+            setPosCartGroup(undefined);
+        } catch (error: any) {
+            toast.error(error.response.data.message);
+        }
+    };
+
     const handleResetOrder = () => {
         setPosCartGroup(undefined);
     };
 
     const handleCustomerFiltersUpdate = useCallback((customers: ICustomer[]) => {
-        setCustomerFilters(uniqueCustomersById(customers));
+        setCustomerFilters(customers);
     }, []);
 
     const handleCustomerSuccess = useCallback((newCustomer: ICustomer, newAddress?: IAddress) => {
         setCustomer(newCustomer);
         setAddress(newAddress || null);
-        setCustomerFilters((currentCustomers) =>
-            uniqueCustomersById([newCustomer, ...(currentCustomers || [])]),
-        );
-    }, []);
+        if (newCustomer.id !== 0 && !customerFilters?.find(c => c.id === newCustomer.id)) {
+            setCustomerFilters([newCustomer, ...(customerFilters || [])]);
+        }
+    }, [customerFilters]);
+
+    const handleFullScreenView = async () => {
+        try {
+            if (document.fullscreenElement) {
+                await document.exitFullscreen();
+                return;
+            }
+
+            const app = document.getElementById('app');
+            if (app?.requestFullscreen) {
+                await app.requestFullscreen();
+            }
+        } catch (error) {
+            toast.error(translate('Unable to toggle fullscreen'));
+        }
+    };
 
     const totalPrice =
         (posCartGroup?.posCarts.reduce(
@@ -563,6 +560,77 @@ const App = () => {
         Number(discount) +
         Number(shipping) +
         Number(tax);
+
+    useEffect(() => {
+        if (!selectedWarehouseId || !scanQuery.trim()) {
+            setScanFeedback(null);
+            return;
+        }
+
+        const timerId = setTimeout(async () => {
+            try {
+                const result = await getPosProductsVariations({
+                    ...filters,
+                    page: 1,
+                    warehouseId: selectedWarehouseId,
+                    searchKey: scanQuery.trim(),
+                });
+
+                const matchedProduct = findMatchedProduct(
+                    result.data,
+                    scanQuery,
+                );
+
+                if (!matchedProduct) {
+                    setScanFeedback({
+                        product: null,
+                        message: translate('No matching barcode or QR result'),
+                        tone: 'error',
+                    });
+                    return;
+                }
+
+                const remainingStock = getRemainingStockForVariation(
+                    matchedProduct,
+                    selectedWarehouseId,
+                    posCartGroup?.posCarts || [],
+                    matchedProduct.id,
+                );
+
+                const stockTone =
+                    remainingStock <= 0
+                        ? 'out'
+                        : remainingStock <= 5
+                          ? 'low'
+                          : 'ok';
+
+                setScanFeedback({
+                    product: matchedProduct,
+                    message:
+                        remainingStock > 0
+                            ? `${translate('In stock')}: ${remainingStock}`
+                            : stockOverride
+                              ? translate('Out of stock, override available')
+                              : translate('Out of stock'),
+                    tone: stockTone,
+                });
+            } catch {
+                setScanFeedback({
+                    product: null,
+                    message: translate('Unable to look up stock right now'),
+                    tone: 'error',
+                });
+            }
+        }, 250);
+
+        return () => clearTimeout(timerId);
+    }, [
+        filters,
+        posCartGroup?.posCarts,
+        scanQuery,
+        selectedWarehouseId,
+        stockOverride,
+    ]);
 
     const getCartLineLeftStock = (
         posCart: IPosCartGroup['posCarts'][number],
@@ -612,6 +680,36 @@ const App = () => {
         }
 
         void addProductToCart(productGroup.variations[0]);
+    };
+
+    const getScanFeedbackClassName = () => {
+        switch (scanFeedback?.tone) {
+            case 'ok':
+                return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+            case 'low':
+                return 'border-amber-200 bg-amber-50 text-amber-800';
+            case 'out':
+                return 'border-red-200 bg-red-50 text-red-700';
+            default:
+                return 'border-border bg-background-primary-light text-muted';
+        }
+    };
+
+    const handleScanSubmit = async (
+        event?: KeyboardEvent<HTMLInputElement>,
+    ) => {
+        if (event && event.key !== 'Enter') {
+            return;
+        }
+
+        event?.preventDefault();
+
+        if (!scanFeedback?.product) {
+            toast.error(translate('No matching product found'));
+            return;
+        }
+
+        await addProductToCart(scanFeedback.product);
     };
 
     return (
@@ -758,7 +856,7 @@ const App = () => {
                 </div>
             </ModalWrapper>
 
-            <div className="pb-24 lg:pb-0">
+            <div className={isFullscreen ? 'px-4 pb-24 lg:pb-0' : 'pb-24 lg:pb-0'}>
                 {/* Desktop Header */}
                 <div className="hidden lg:flex dashboard-nav pt-6 mb-8 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-center">
@@ -769,12 +867,118 @@ const App = () => {
                             {translate('POS (Point Of Sales)')}
                         </span>
                     </div>
+
+                    <div className="hidden lg:flex w-full sm:w-auto sm:flex-wrap items-center justify-end gap-2">
+                        <Button
+                            type="button"
+                            variant="primary"
+                            className="!h-10 min-w-0 shrink-0 whitespace-nowrap !px-4 text-sm inline-flex items-center justify-center gap-2"
+                            onClick={handleProductViewModeToggle}
+                            title={
+                                productViewMode === 'product-first'
+                                    ? translate('Classic View')
+                                    : translate('Product-First View')
+                            }
+                            aria-label={
+                                productViewMode === 'product-first'
+                                    ? translate('Classic View')
+                                    : translate('Product-First View')
+                            }
+                        >
+                            {productViewMode === 'product-first' ? (
+                                <FaListUl className="shrink-0" />
+                            ) : (
+                                <FaThLarge className="shrink-0" />
+                            )}
+                            <span>
+                                {productViewMode === 'product-first'
+                                    ? translate('Classic View')
+                                    : translate('Product-First View')}
+                            </span>
+                        </Button>
+
+                        {canOverrideStock ? (
+                            <label className="flex h-10 min-w-0 shrink-0 items-center justify-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
+                                <input
+                                    type="checkbox"
+                                    checked={stockOverride}
+                                    onChange={(event) =>
+                                        setStockOverride(event.target.checked)
+                                    }
+                                />
+                                <span>{translate('Manager override stock')}</span>
+                            </label>
+                        ) : null}
+
+                        <div className="[&>button]:!h-10 [&>button]:!px-3 [&>button]:text-sm">
+                            <OrderHistoryModal />
+                        </div>
+                        <div className="[&>button]:!h-10 [&>button]:w-10">
+                            <HoldOrdersModal
+                                onSelectOrder={(order) => {
+                                    setPosCartGroup(order);
+                                }}
+                            />
+                        </div>
+                        <button
+                            className="flex h-10 w-10 items-center justify-center rounded bg-primary text-2xl text-white hover:bg-primary/80"
+                            onClick={handleFullScreenView}
+                            type="button"
+                            title={
+                                isFullscreen
+                                    ? translate('Exit fullscreen')
+                                    : translate('Enter fullscreen')
+                            }
+                            aria-label={
+                                isFullscreen
+                                    ? translate('Exit fullscreen')
+                                    : translate('Enter fullscreen')
+                            }
+                        >
+                            {isFullscreen ? <BiExitFullscreen /> : <BiExpand />}
+                        </button>
+                    </div>
                 </div>
 
                 <div className="hidden lg:grid lg:grid-cols-2 xl:grid-cols-5 gap-5">
                     <div className="card xl:col-span-3">
                         <div className="card__content">
-                            <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(160px,220px)_minmax(0,1fr)] xl:gap-5">
+                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_100px_108px_minmax(0,1fr)] xl:gap-5">
+                                <SelectInput
+                                    name="warehouseId"
+                                    placeholder={translate('Warehouse')}
+                                    value={filters.warehouseId}
+                                    options={[
+                                        {
+                                            id: '',
+                                            name: translate('Select Warehouse'),
+                                        },
+                                        ...filterData.warehouses,
+                                    ]}
+                                    getOptionLabel={(warehouse) => warehouse.name}
+                                    getOptionValue={(warehouse) => warehouse.id}
+                                    onChange={(newValue) => {
+                                        handleFilter('warehouseId', newValue.id);
+                                    }}
+                                    groupClassName="w-full"
+                                />
+
+                                <SelectInput
+                                    name="brandId"
+                                    placeholder={translate('Brand')}
+                                    value={filters.brandId}
+                                    options={[
+                                        { id: '', name: 'All brands' },
+                                        ...filterData.brands,
+                                    ]}
+                                    getOptionLabel={(brand) => brand.name}
+                                    getOptionValue={(brand) => brand.id}
+                                    onChange={(newValue) => {
+                                        handleFilter('brandId', newValue.id);
+                                    }}
+                                    groupClassName="w-full"
+                                />
+
                                 <SelectInput
                                     name="categoryId"
                                     placeholder={translate('Category')}
@@ -802,10 +1006,64 @@ const App = () => {
                                 />
                             </div>
 
+                            <div className="mt-4 rounded-md border border-border bg-background-primary-light/50 p-3 sm:p-4">
+                                <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-muted">
+                                    {translate('SKU / Barcode Input')}
+                                </label>
+                                <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                                    <input
+                                        type="text"
+                                        value={scanQuery}
+                                        onChange={(event) =>
+                                            setScanQuery(event.target.value)
+                                        }
+                                        onKeyDown={handleScanSubmit}
+                                        placeholder={translate(
+                                            'Type SKU / code and press Enter',
+                                        )}
+                                        className="h-10 w-full min-w-0 rounded-md border border-border bg-background px-3 focus:border-secondary-light focus:outline-none"
+                                    />
+                                    <Button
+                                        variant="primary"
+                                        className="!h-10 !px-3"
+                                        onClick={() => void handleScanSubmit()}
+                                        type="button"
+                                    >
+                                        {translate('Add')}
+                                    </Button>
+                                </div>
+
+                                {scanFeedback ? (
+                                    <div
+                                        className={`mt-3 rounded-md border px-3 py-2 text-sm ${getScanFeedbackClassName()}`}
+                                    >
+                                        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                                            <div>
+                                                <div className="font-semibold">
+                                                    {scanFeedback.product?.product.name ||
+                                                        translate('No product found')}
+                                                </div>
+                                                <div>{scanFeedback.message}</div>
+                                            </div>
+                                            {scanFeedback.product ? (
+                                                <span className="rounded-full px-2.5 py-1 text-xs font-semibold bg-white/70">
+                                                    {scanFeedback.product.sku ||
+                                                        scanFeedback.product.code}
+                                                </span>
+                                            ) : null}
+                                        </div>
+                                    </div>
+                                ) : null}
+                            </div>
+
                             <div className="grid grid-cols-2 sm:grid-cols-3 2xl:grid-cols-4 4xl:grid-cols-5 gap-3.5 mt-6 items-stretch">
                                 {isLoading.loadingProduct ? (
                                     <div className="col-span-full flex justify-center pt-10">
                                         <Spinner className="w-[50px] h-[50px]" />
+                                    </div>
+                                ) : !filters.warehouseId ? (
+                                    <div className="col-span-full">
+                                        Please select a warehouse
                                     </div>
                                 ) : !posProducts.length ? (
                                     <div className="col-span-full">
@@ -826,20 +1084,13 @@ const App = () => {
                                     productGroups.map((productGroup) => {
                                         const stockQty =
                                             getProductGroupStock(productGroup);
-                                            const stockBadge = getStockBadgeMeta(
-                                                Math.max(stockQty, 0),
-                                            );
-                                            const canSelect =
-                                                canSelectProductGroup(productGroup);
-                                            const displayVariation =
-                                                getProductGroupDisplayVariation(productGroup);
-                                            const discountPercent = displayVariation
-                                                ? getVariationDiscountPercent(displayVariation)
-                                                : 0;
-                                            const hasDiscount =
-                                                !!displayVariation && discountPercent > 0;
+                                        const stockBadge = getStockBadgeMeta(
+                                            Math.max(stockQty, 0),
+                                        );
+                                        const canSelect =
+                                            canSelectProductGroup(productGroup);
 
-                                            return (
+                                        return (
                                             <div
                                                 key={productGroup.productId}
                                                 className={`flex h-full flex-col overflow-hidden rounded-md border border-border bg-background transition-colors ${
@@ -885,11 +1136,6 @@ const App = () => {
                                                               )
                                                             : stockBadge.label}
                                                     </span>
-                                                    {discountPercent > 0 ? (
-                                                        <span className="absolute left-2 top-2 rounded-full bg-red-500 px-2.5 py-1 text-xs font-bold text-white shadow-sm">
-                                                            {discountPercent}% OFF
-                                                        </span>
-                                                    ) : null}
                                                     {hasSelectableVariations(
                                                         productGroup,
                                                     ) ? (
@@ -905,18 +1151,29 @@ const App = () => {
                                                     <h3 className="line-clamp-2 min-h-[40px] text-sm font-medium">
                                                         {productGroup.productName}
                                                     </h3>
-                                                    {displayVariation ? (
-                                                        <div className="mt-2 flex flex-col">
-                                                            {hasDiscount ? (
-                                                                <span className="text-xs font-medium text-muted line-through">
-                                                                    {currencyFormatter(displayVariation.basePrice)}
-                                                                </span>
-                                                            ) : null}
-                                                            <span className="text-sm font-bold text-secondary">
-                                                                {currencyFormatter(displayVariation.discountedBasePrice)}
-                                                            </span>
-                                                        </div>
-                                                    ) : null}
+                                                    <div className="mt-2 flex items-center justify-between text-xs text-muted">
+                                                        <span>
+                                                            ID:{' '}
+                                                            {
+                                                                productGroup.productId
+                                                            }
+                                                        </span>
+                                                        <span>
+                                                            {
+                                                                productGroup
+                                                                    .variations
+                                                                    .length
+                                                            }{' '}
+                                                            {translate(
+                                                                'variant',
+                                                            )}
+                                                            {productGroup
+                                                                .variations
+                                                                .length > 1
+                                                                ? 's'
+                                                                : ''}
+                                                        </span>
+                                                    </div>
                                                     <Button
                                                         type="button"
                                                         variant="primary"
@@ -947,13 +1204,8 @@ const App = () => {
                                     className="mt-8"
                                     pagination={paginationData}
                                     onPageChange={({ selected }) => {
-                                        const nextSearchParams =
-                                            new URLSearchParams(searchParams);
-                                        nextSearchParams.set(
-                                            'page',
-                                            String(selected),
-                                        );
-                                        setSearchParams(nextSearchParams);
+                                        searchParams.set('page', String(selected));
+                                        setSearchParams(searchParams);
                                     }}
                                 />
                             ) : null}
@@ -971,63 +1223,27 @@ const App = () => {
                                 </span>
                             </p>
 
-                            <div className="flex items-center gap-2">
-                                {customer ? (
-                                    <>
-                                        <button
-                                            type="button"
-                                            onClick={() => setIsCustomerSearchModalOpen(true)}
-                                            className="flex min-w-[200px] flex-col rounded-md border border-border bg-background-primary-light px-3 py-[7px] text-left text-sm hover:border-primary/40 transition-colors"
-                                            title={translate('Change Customer')}
-                                        >
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-muted">
-                                                    <i className="fa-light fa-user"></i>
-                                                </span>
-                                                <span className="font-medium text-foreground truncate">
-                                                    {customer.name}
-                                                </span>
-                                                {customer.phone && (
-                                                    <span className="text-xs text-muted truncate">
-                                                        ({customer.phone})
-                                                    </span>
-                                                )}
-                                                <span className="text-[10px] text-muted ml-auto shrink-0">
-                                                    {translate('Change')}
-                                                </span>
-                                            </div>
-                                            {address && (
-                                                <p className="mt-0.5 truncate text-xs text-muted pl-5">
-                                                    {address.fullAddress ||
-                                                        (address.city?.name || address.state?.name) ||
-                                                        ''}
-                                                </p>
-                                            )}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setEditingCustomer(customer);
-                                                setIsCustomerModalOpen(true);
-                                            }}
-                                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border text-muted hover:text-primary hover:border-primary/40"
-                                            title={translate('Edit Customer')}
-                                        >
-                                            <FiEdit2 className="text-sm" />
-                                        </button>
-                                    </>
-                                ) : (
-                                    <Button
-                                        type="button"
-                                        variant="secondary"
-                                        onClick={() => setIsCustomerSearchModalOpen(true)}
-                                    >
-                                        <span className="mr-2">
-                                            <i className="fa-light fa-user-plus"></i>
+                            <div className="flex justify-end gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setIsAddingNewCustomer(false);
+                                        setCustomerModalViewMode('manage');
+                                        setIsCustomerModalOpen(true);
+                                    }}
+                                    className="flex items-center gap-2 rounded-md border border-border bg-background-primary-light px-3 py-2 text-sm hover:border-primary/40"
+                                >
+                                    <FiSettings />
+                                    {customer ? (
+                                        <span className="max-w-[150px] truncate">
+                                            {customer.name}
                                         </span>
-                                        {translate('Add Customer')}
-                                    </Button>
-                                )}
+                                    ) : (
+                                        <span>
+                                            {translate('Walk In Customer')}
+                                        </span>
+                                    )}
+                                </button>
                             </div>
                         </div>
 
@@ -1137,20 +1353,11 @@ const App = () => {
                                     </label>
                                     <Input
                                         name="discount"
-                                        type="text"
-                                        inputMode="decimal"
                                         placeholder={currencyFormatter(0)}
                                         value={discount}
                                         onChange={(e) =>
-                                            handleNumericChange(
-                                                e.target.value,
-                                                setDiscount,
-                                            )
-                                        }
-                                        onBlur={() =>
-                                            handleNumericBlur(
-                                                discount,
-                                                setDiscount,
+                                            setDiscount(
+                                                Number(e.target.value) || '',
                                             )
                                         }
                                     />
@@ -1161,20 +1368,11 @@ const App = () => {
                                     </label>
                                     <Input
                                         name="shipping"
-                                        type="text"
-                                        inputMode="decimal"
                                         placeholder={currencyFormatter(0)}
                                         value={shipping}
                                         onChange={(e) =>
-                                            handleNumericChange(
-                                                e.target.value,
-                                                setShipping,
-                                            )
-                                        }
-                                        onBlur={() =>
-                                            handleNumericBlur(
-                                                shipping,
-                                                setShipping,
+                                            setShipping(
+                                                Number(e.target.value) || '',
                                             )
                                         }
                                     />
@@ -1185,18 +1383,10 @@ const App = () => {
                                     </label>
                                     <Input
                                         name="tax"
-                                        type="text"
-                                        inputMode="decimal"
                                         placeholder={currencyFormatter(0)}
                                         value={tax}
                                         onChange={(e) =>
-                                            handleNumericChange(
-                                                e.target.value,
-                                                setTax,
-                                            )
-                                        }
-                                        onBlur={() =>
-                                            handleNumericBlur(tax, setTax)
+                                            setTax(Number(e.target.value) || '')
                                         }
                                     />
                                 </div>
@@ -1207,13 +1397,23 @@ const App = () => {
                             </div>
                         </div>
 
-                        <div className="card__footer grid grid-cols-2 gap-3.5 border-t border-border pt-8">
+                        <div className="card__footer grid grid-cols-3 gap-3.5 border-t border-border pt-8">
+                            <Button
+                                variant="warning"
+                                disabled={!posCartGroup}
+                                onClick={handleHoldOrder}
+                            >
+                                <span className="text-2xl">
+                                    <IoHandRightOutline />
+                                </span>
+                                {translate('Hold Order')}
+                            </Button>
                             <Button variant="danger" onClick={handleResetOrder}>
                                 {translate('Rest All')}
                             </Button>
                             <SubmitOrderModal
-                                discount={Number(discount) || 0}
-                                shippingCharge={Number(shipping) || 0}
+                                discount={discount || 0}
+                                shippingCharge={shipping || 0}
                                 stockOverride={stockOverride}
                                 posCartGroup={posCartGroup}
                                 customer={customer}
@@ -1239,59 +1439,116 @@ const App = () => {
                                 {translate('POS')}
                             </span>
                         </div>
+                        <div className="flex items-center gap-2">
+                            <OrderHistoryModal />
+                            <HoldOrdersModal
+                                onSelectOrder={(order) => {
+                                    setPosCartGroup(order);
+                                }}
+                            />
+                            {canOverrideStock && (
+                                <label className="flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-900">
+                                    <input
+                                        type="checkbox"
+                                        checked={stockOverride}
+                                        onChange={(event) =>
+                                            setStockOverride(event.target.checked)
+                                        }
+                                    />
+                                    <span>{translate('Override')}</span>
+                                </label>
+                            )}
+                        </div>
                     </div>
                 </div>
 
                 {/* Customer Row */}
                 <div className="border-b border-border bg-background px-3 py-2">
-                    {customer ? (
-                        <div className="flex items-start gap-2">
-                            <span className="text-lg text-muted shrink-0 mt-2">
-                                <i className="fa-light fa-user"></i>
-                            </span>
-                            <button
-                                type="button"
-                                onClick={() => setIsCustomerSearchModalOpen(true)}
-                                className="flex-1 min-w-0 text-left py-1"
-                            >
-                                <p className="text-sm font-medium text-foreground truncate">
-                                    {customer.name}
+                    <div className="flex items-start gap-2">
+                        <span className="text-lg text-muted shrink-0 mt-2">
+                            <i className="fa-light fa-user"></i>
+                        </span>
+                        <div className="flex-1 min-w-0">
+                            <SelectInput
+                                name="customer-select"
+                                placeholder={translate('Add Customer(Phone Number)...')}
+                                value={customer?.id ?? 0}
+                                options={[
+                                    { id: 0, name: translate('Walk In Customer'), label: translate('Walk In Customer') },
+                                    ...(customerFilters || []).map(c => ({
+                                        ...c,
+                                        label: c.phone ? `${c.name} (${c.phone})` : c.name,
+                                    })),
+                                ]}
+                                getOptionLabel={(opt) => opt.label || opt.name}
+                                getOptionValue={(opt) => String(opt.id)}
+                                onChange={async (selected) => {
+                                    if (selected?.id === 0) {
+                                        handleCustomerSuccess({ id: 0, name: 'Walk In Customer' } as ICustomer);
+                                    } else if (selected) {
+                                        try {
+                                            const addresses = await getAddresses(selected.id);
+                                            if (addresses.length === 1) {
+                                                handleCustomerSuccess(selected, addresses[0]);
+                                            } else if (addresses.length > 1) {
+                                                setModalCustomer(selected);
+                                                setModalAddresses(addresses);
+                                                setCustomerModalViewMode('address-picker');
+                                                setIsCustomerModalOpen(true);
+                                            } else {
+                                                handleCustomerSuccess(selected);
+                                            }
+                                        } catch {
+                                            handleCustomerSuccess(selected);
+                                        }
+                                    }
+                                }}
+                                classNames={{
+                                    control: (state) =>
+                                        `!min-h-[40px] !bg-background-primary-light !border-border ${state.isFocused ? '!border-primary/40' : ''}`,
+                                    input: () => '!text-sm',
+                                    placeholder: () => '!text-muted !text-sm',
+                                    singleValue: () => '!text-sm !font-medium',
+                                }}
+                            />
+                            {address && (
+                                <p className="text-xs text-muted mt-1 truncate">
+                                    {address.fullAddress || `${address.city?.name || address.state?.name}`}
                                 </p>
-                                {customer.phone && (
-                                    <p className="text-xs text-muted truncate">{customer.phone}</p>
-                                )}
-                                <p className="text-xs text-muted mt-0.5 truncate min-h-[16px]">
-                                    {address?.fullAddress || (address?.city?.name || address?.state?.name) || ''}
+                            )}
+                            {customer?.phone && (
+                                <p className="text-xs text-muted mt-0.5 truncate">
+                                    {customer.phone}
                                 </p>
-                                <span className="text-[10px] text-primary mt-1 inline-block">
-                                    {translate('Tap to change')}
-                                </span>
-                            </button>
+                            )}
+                        </div>
+                        {address && (
                             <button
                                 type="button"
                                 onClick={() => {
-                                    setEditingCustomer(customer);
+                                    setIsAddingNewCustomer(false);
+                                    setCustomerModalViewMode('manage');
                                     setIsCustomerModalOpen(true);
                                 }}
                                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted hover:text-primary mt-1"
-                                title={translate('Edit Customer')}
+                                title={translate('Manage Customer')}
                             >
                                 <FiEdit2 className="text-sm" />
                             </button>
-                        </div>
-                    ) : (
-                        <Button
+                        )}
+                        <button
                             type="button"
-                            variant="primary"
-                            className="w-full"
-                            onClick={() => setIsCustomerSearchModalOpen(true)}
+                            onClick={() => {
+                                setIsAddingNewCustomer(true);
+                                setCustomerModalViewMode('manage');
+                                setIsCustomerModalOpen(true);
+                            }}
+                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary text-white hover:bg-primary/90"
+                            title={translate('Add New Customer')}
                         >
-                            <span className="mr-2">
-                                <i className="fa-light fa-user-plus"></i>
-                            </span>
-                            {translate('Add Customer')}
-                        </Button>
-                    )}
+                            <AiOutlinePlus className="text-lg" />
+                        </button>
+                    </div>
                 </div>
 
                 {/* Product Filter Row */}
@@ -1319,9 +1576,61 @@ const App = () => {
                         onChange={handleSearch}
                         classNames={{
                             form: 'w-full',
-                            input: 'w-full !h-10 !text-base',
+                            input: 'w-full !h-10 !text-sm',
                         }}
                     />
+                </div>
+
+                {/* SKU / Barcode Input */}
+                <div className="border-b border-border bg-background px-3 py-1.5">
+                    <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-muted">
+                        {translate('SKU / Barcode Input')}
+                    </label>
+                    <div className="flex items-center gap-2">
+                        <input
+                            type="text"
+                            value={scanQuery}
+                            onChange={(event) =>
+                                setScanQuery(event.target.value)
+                            }
+                            onKeyDown={handleScanSubmit}
+                            placeholder={translate(
+                                'Type SKU / code and press Enter',
+                            )}
+                            className="h-9 flex-1 min-w-0 rounded-md border border-border bg-background-primary-light px-3 text-sm focus:border-secondary-light focus:outline-none"
+                        />
+                        <Button
+                            variant="primary"
+                            className="!h-9 shrink-0 !px-3 text-sm"
+                            onClick={() => void handleScanSubmit()}
+                            type="button"
+                        >
+                            {translate('Add')}
+                        </Button>
+                    </div>
+                    {scanFeedback ? (
+                        <div
+                            className={`mt-1.5 rounded-md border px-2.5 py-1.5 text-xs ${getScanFeedbackClassName()}`}
+                        >
+                            <div className="flex items-center justify-between gap-2">
+                                <div>
+                                    <span className="font-semibold">
+                                        {scanFeedback.product?.product.name ||
+                                            translate('No product found')}
+                                    </span>
+                                    <span className="ml-1">
+                                        {scanFeedback.message}
+                                    </span>
+                                </div>
+                                {scanFeedback.product ? (
+                                    <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-white/70">
+                                        {scanFeedback.product.sku ||
+                                            scanFeedback.product.code}
+                                    </span>
+                                ) : null}
+                            </div>
+                        </div>
+                    ) : null}
                 </div>
 
                 {/* Product List */}
@@ -1330,6 +1639,10 @@ const App = () => {
                         {isLoading.loadingProduct ? (
                             <div className="col-span-full flex justify-center pt-10">
                                 <Spinner className="w-[50px] h-[50px]" />
+                            </div>
+                        ) : !filters.warehouseId ? (
+                            <div className="col-span-full text-center text-muted">
+                                {translate('Please select a warehouse')}
                             </div>
                         ) : !posProducts.length ? (
                             <div className="col-span-full text-center text-muted">
@@ -1355,13 +1668,6 @@ const App = () => {
                                 );
                                 const canSelect =
                                     canSelectProductGroup(productGroup);
-                                const displayVariation =
-                                    getProductGroupDisplayVariation(productGroup);
-                                const discountPercent = displayVariation
-                                    ? getVariationDiscountPercent(displayVariation)
-                                    : 0;
-                                const hasDiscount =
-                                    !!displayVariation && discountPercent > 0;
 
                                 return (
                                     <div
@@ -1407,11 +1713,6 @@ const App = () => {
                                                     ? translate('Override')
                                                     : stockBadge.label}
                                             </span>
-                                            {discountPercent > 0 ? (
-                                                <span className="absolute left-2 top-2 rounded-full bg-red-500 px-2 py-1 text-[11px] font-bold text-white shadow-sm">
-                                                    {discountPercent}% OFF
-                                                </span>
-                                            ) : null}
                                             {hasSelectableVariations(
                                                 productGroup,
                                             ) ? (
@@ -1425,18 +1726,6 @@ const App = () => {
                                             <h3 className="line-clamp-2 text-xs font-medium">
                                                 {productGroup.productName}
                                             </h3>
-                                            {displayVariation ? (
-                                                <div className="mt-2 flex flex-col">
-                                                    {hasDiscount ? (
-                                                        <span className="text-[11px] font-medium text-muted line-through">
-                                                            {currencyFormatter(displayVariation.basePrice)}
-                                                        </span>
-                                                    ) : null}
-                                                    <span className="text-sm font-bold text-secondary">
-                                                        {currencyFormatter(displayVariation.discountedBasePrice)}
-                                                    </span>
-                                                </div>
-                                            ) : null}
                                             <Button
                                                 type="button"
                                                 variant="primary"
@@ -1465,14 +1754,8 @@ const App = () => {
                             className="mt-6"
                             pagination={paginationData}
                             onPageChange={({ selected }) => {
-                                const nextSearchParams = new URLSearchParams(
-                                    searchParams,
-                                );
-                                nextSearchParams.set(
-                                    'page',
-                                    String(selected),
-                                );
-                                setSearchParams(nextSearchParams);
+                                searchParams.set('page', String(selected));
+                                setSearchParams(searchParams);
                             }}
                         />
                     )}
@@ -1500,15 +1783,11 @@ const App = () => {
                 </div>
 
                 {/* Cart Bottom Sheet (Vaul Drawer) */}
-                <Drawer.Root
-                    open={isCartDrawerOpen}
-                    onOpenChange={setIsCartDrawerOpen}
-                    repositionInputs={false}
-                >
+                <Drawer.Root open={isCartDrawerOpen} onOpenChange={setIsCartDrawerOpen}>
                     <Drawer.Portal>
                         <Drawer.Overlay className="fixed inset-0 z-40 bg-black/40" />
-                        <Drawer.Content className="fixed bottom-0 left-0 right-0 z-50 flex max-h-[85dvh] flex-col rounded-t-xl bg-background text-foreground outline-none">
-                            <div className="mx-auto mt-3 h-1 w-12 shrink-0 rounded-full bg-muted/60" />
+                        <Drawer.Content className="fixed bottom-0 left-0 right-0 z-50 flex max-h-[85vh] flex-col rounded-t-xl bg-white dark:bg-background-secondary outline-none">
+                            <div className="mx-auto mt-3 h-1 w-12 shrink-0 rounded-full bg-gray-300 dark:bg-gray-600" />
 
                             {/* Cart Header */}
                             <div className="flex items-center justify-between border-b border-border px-4 py-3">
@@ -1525,7 +1804,7 @@ const App = () => {
                             </div>
 
                             {/* Cart Items */}
-                            <div ref={cartBodyRef} className="flex-1 overflow-y-auto px-4 py-3 pb-40">
+                            <div className="flex-1 overflow-y-auto px-4 py-3">
                                 {!posCartGroup?.posCarts.length ? (
                                     <div className="rounded-md border border-dashed border-border px-4 py-8 text-center text-muted">
                                         {translate('No product selected yet')}
@@ -1535,7 +1814,7 @@ const App = () => {
                                         {posCartGroup.posCarts.map((posCart) => (
                                             <div
                                                 key={posCart.id}
-                                                className="rounded-md border border-border bg-background-hover/40 p-3"
+                                                className="rounded-md border border-border p-3"
                                             >
                                                 <div className="flex items-start justify-between gap-3">
                                                     <div className="min-w-0 flex-1">
@@ -1616,21 +1895,10 @@ const App = () => {
                                                 </label>
                                                 <Input
                                                     name="discount-mobile"
-                                                    type="text"
-                                                    inputMode="decimal"
                                                     placeholder={currencyFormatter(0)}
                                                     value={discount}
                                                     onChange={(e) =>
-                                                        handleNumericChange(
-                                                            e.target.value,
-                                                            setDiscount,
-                                                        )
-                                                    }
-                                                    onBlur={() =>
-                                                        handleNumericBlur(
-                                                            discount,
-                                                            setDiscount,
-                                                        )
+                                                        setDiscount(Number(e.target.value) || '')
                                                     }
                                                 />
                                             </div>
@@ -1640,21 +1908,10 @@ const App = () => {
                                                 </label>
                                                 <Input
                                                     name="shipping-mobile"
-                                                    type="text"
-                                                    inputMode="decimal"
                                                     placeholder={currencyFormatter(0)}
                                                     value={shipping}
                                                     onChange={(e) =>
-                                                        handleNumericChange(
-                                                            e.target.value,
-                                                            setShipping,
-                                                        )
-                                                    }
-                                                    onBlur={() =>
-                                                        handleNumericBlur(
-                                                            shipping,
-                                                            setShipping,
-                                                        )
+                                                        setShipping(Number(e.target.value) || '')
                                                     }
                                                 />
                                             </div>
@@ -1664,18 +1921,10 @@ const App = () => {
                                                 </label>
                                                 <Input
                                                     name="tax-mobile"
-                                                    type="text"
-                                                    inputMode="decimal"
                                                     placeholder={currencyFormatter(0)}
                                                     value={tax}
                                                     onChange={(e) =>
-                                                        handleNumericChange(
-                                                            e.target.value,
-                                                            setTax,
-                                                        )
-                                                    }
-                                                    onBlur={() =>
-                                                        handleNumericBlur(tax, setTax)
+                                                        setTax(Number(e.target.value) || '')
                                                     }
                                                 />
                                             </div>
@@ -1691,7 +1940,22 @@ const App = () => {
                             {/* Cart Actions */}
                             {posCartGroup?.posCarts.length > 0 && (
                                 <div className="border-t border-border px-4 py-3">
-                                    <div className="grid grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-3 gap-3">
+                                        <Button
+                                            variant="warning"
+                                            disabled={!posCartGroup}
+                                            onClick={() => {
+                                                handleHoldOrder();
+                                                setIsCartDrawerOpen(false);
+                                            }}
+                                        >
+                                            <span className="text-xl">
+                                                <IoHandRightOutline />
+                                            </span>
+                                            <span className="hidden sm:inline">
+                                                {translate('Hold')}
+                                            </span>
+                                        </Button>
                                         <Button
                                             variant="danger"
                                             onClick={() => {
@@ -1702,8 +1966,8 @@ const App = () => {
                                             {translate('Reset')}
                                         </Button>
                                         <SubmitOrderModal
-                                            discount={Number(discount) || 0}
-                                            shippingCharge={Number(shipping) || 0}
+                                            discount={discount || 0}
+                                            shippingCharge={shipping || 0}
                                             stockOverride={stockOverride}
                                             posCartGroup={posCartGroup}
                                             customer={customer}
@@ -1742,6 +2006,47 @@ const App = () => {
                     <div className="theme-modal__body space-y-4">
                         <div>
                             <label className="mb-2 block text-sm font-medium">
+                                {translate('Warehouse')}
+                                <span className="ml-1 text-red-500">*</span>
+                            </label>
+                            <SelectInput
+                                name="filter-warehouse"
+                                placeholder={translate('Select Warehouse')}
+                                value={filters.warehouseId}
+                                options={[
+                                    { id: '', name: translate('Select Warehouse') },
+                                    ...filterData.warehouses,
+                                ]}
+                                getOptionLabel={(warehouse) => warehouse.name}
+                                getOptionValue={(warehouse) => warehouse.id}
+                                onChange={(newValue) => {
+                                    handleFilter('warehouseId', newValue.id);
+                                }}
+                            />
+                        </div>
+
+                        <div>
+                            <label className="mb-2 block text-sm font-medium">
+                                {translate('Brand')}
+                            </label>
+                            <SelectInput
+                                name="filter-brand"
+                                placeholder={translate('All brands')}
+                                value={filters.brandId}
+                                options={[
+                                    { id: '', name: translate('All brands') },
+                                    ...filterData.brands,
+                                ]}
+                                getOptionLabel={(brand) => brand.name}
+                                getOptionValue={(brand) => brand.id}
+                                onChange={(newValue) => {
+                                    handleFilter('brandId', newValue.id);
+                                }}
+                            />
+                        </div>
+
+                        <div>
+                            <label className="mb-2 block text-sm font-medium">
                                 {translate('Category')}
                             </label>
                             <SelectInput
@@ -1766,6 +2071,7 @@ const App = () => {
                                 variant="light"
                                 className="flex-1"
                                 onClick={() => {
+                                    handleFilter('brandId', '');
                                     handleFilter('categoryId', '');
                                 }}
                             >
@@ -1784,29 +2090,24 @@ const App = () => {
                 </ModalWrapper>
             </div>
 
-            {/* Customer Modal */}
+            {/* Customer Modal (Desktop + Mobile) */}
             <CustomerModal
                 isOpen={isCustomerModalOpen}
                 onClose={() => {
-                    setEditingCustomer(undefined);
+                    setCustomerModalViewMode('select');
+                    setModalAddresses([]);
+                    setModalCustomer(null);
+                    setIsAddingNewCustomer(false);
                     setIsCustomerModalOpen(false);
                 }}
-                customer={editingCustomer}
+                initialCustomer={isAddingNewCustomer ? undefined : (customerModalViewMode === 'address-picker' ? (modalCustomer || customer) : customer)}
+                initialAddress={address || undefined}
+                initialAddresses={modalAddresses}
                 onSuccess={handleCustomerSuccess}
-                customerFilters={customerOptions}
+                customerFilters={customerFilters || []}
                 onCustomerFiltersUpdate={handleCustomerFiltersUpdate}
                 isMobile={isMobile}
-            />
-
-            {/* Customer Search Modal */}
-            <CustomerSearchModal
-                isOpen={isCustomerSearchModalOpen}
-                onClose={() => setIsCustomerSearchModalOpen(false)}
-                onSuccess={(newCustomer, newAddress) => {
-                    handleCustomerSuccess(newCustomer, newAddress);
-                    setIsCustomerSearchModalOpen(false);
-                }}
-                isMobile={isMobile}
+                defaultViewMode={customerModalViewMode}
             />
 
         </>

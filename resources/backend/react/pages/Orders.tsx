@@ -135,9 +135,8 @@ const showDeleteOrderConfirmation = (): Promise<boolean> => {
     const microModal = browserWindow.MicroModal;
 
     if (!modal || !form || !title || !text || !submitButton || !microModal) {
-        return Promise.resolve(
-            window.confirm('Are you sure you want to delete this order?'),
-        );
+        toast.error('Confirmation modal is not available');
+        return Promise.resolve(false);
     }
 
     title.textContent = 'Delete Order';
@@ -433,7 +432,6 @@ const OrderPage: React.FC = () => {
         orderId: number,
         event: React.MouseEvent<HTMLButtonElement>,
     ) => {
-        event.preventDefault();
         event.stopPropagation();
 
         const confirmed = await showDeleteOrderConfirmation();
@@ -442,21 +440,7 @@ const OrderPage: React.FC = () => {
         }
 
         try {
-            const csrfToken =
-                document
-                    .querySelector<HTMLMetaElement>('meta[name="csrf-token"]')
-                    ?.getAttribute('content') || '';
-            const response = await axios.post(
-                `/admin/api/orders/${orderId}/delete`,
-                {},
-                {
-                    headers: {
-                        Accept: 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'X-CSRF-TOKEN': csrfToken,
-                    },
-                },
-            );
+            const response = await axios.delete(`/admin/api/orders/${orderId}`);
             toast.success(
                 response.data.message || 'Order deleted successfully',
             );
@@ -464,10 +448,7 @@ const OrderPage: React.FC = () => {
             await fetchOrders(pagination.current_page);
         } catch (error) {
             const message = axios.isAxiosError(error)
-                ? error.response?.data?.message ||
-                  (error.response?.status
-                      ? `Delete failed with status ${error.response.status}`
-                      : null)
+                ? error.response?.data?.message
                 : null;
 
             toast.error(message || 'Failed to delete order');
@@ -1312,53 +1293,61 @@ const OrderPage: React.FC = () => {
                                             {renderLatestDeliveryUpdate(order)}
                                         </div>
                                     </td>
-                                    <td className="px-4 py-4 min-w-[180px] align-middle">
+                                    <td className="px-6 py-4 w-16">
                                         <SelectPartner order={order} />
                                     </td>
-                                    <td className="px-4 py-4 text-right text-sm font-medium min-w-[190px] align-middle">
-                                        <div className="flex items-center justify-end gap-2 whitespace-nowrap">
-                                            <button
-                                                className="inline-flex h-9 w-9 items-center justify-center rounded-md text-primary hover:bg-primary/10 hover:text-primary"
-                                                title="View Order Details"
-                                                onClick={() =>
-                                                    handleViewOrder(order.id)
-                                                }
-                                            >
-                                                <i className="fa-solid fa-eye"></i>
-                                            </button>
-                                            <button
-                                                className="inline-flex h-9 w-9 items-center justify-center rounded-md text-blue-500 hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-blue-500/10"
-                                                title="Edit Order"
-                                                onClick={() =>
-                                                    handleEditOrder(order.id)
-                                                }
-                                            >
-                                                <i className="fa-solid fa-pen-to-square"></i>
-                                            </button>
-                                            <button
-                                                className="inline-flex h-9 w-9 items-center justify-center rounded-md text-red-500 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-500/10"
-                                                title="Check Courier Information"
-                                                onClick={(e) =>
-                                                    handleFraudCheckClick(
-                                                        e,
-                                                        order.customerPhone,
-                                                    )
-                                                }
-                                            >
-                                                <i className="fa-solid fa-user-shield"></i>
-                                            </button>
-                                            <button
-                                                className="inline-flex h-9 w-9 items-center justify-center rounded-md text-orange-500 hover:bg-orange-50 hover:text-orange-700 dark:hover:bg-orange-500/10"
-                                                title="Delete Order"
-                                                onClick={(event) =>
-                                                    handleDeleteOrder(
-                                                        order.id,
-                                                        event,
-                                                    )
-                                                }
-                                            >
-                                                <i className="fa-solid fa-trash"></i>
-                                            </button>
+                                    <td className="px-6 py-4 text-right text-sm font-medium">
+                                        <div className="flex flex-col items-end gap-1">
+                                            <div className="flex items-center gap-1">
+                                                <button
+                                                    className="text-primary hover:text-primary/80 text-lg p-1"
+                                                    title="View Order Details"
+                                                    onClick={() =>
+                                                        handleViewOrder(
+                                                            order.id,
+                                                        )
+                                                    }
+                                                >
+                                                    <i className="fa-solid fa-eye"></i>
+                                                </button>
+                                                <button
+                                                    className="text-blue-500 hover:text-blue-700 text-lg p-1"
+                                                    title="Edit Order"
+                                                    onClick={() =>
+                                                        handleEditOrder(
+                                                            order.id,
+                                                        )
+                                                    }
+                                                >
+                                                    <i className="fa-solid fa-pen-to-square"></i>
+                                                </button>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                <button
+                                                    className="text-red-500 hover:text-red-700 text-lg p-1"
+                                                    title="Check Courier Information"
+                                                    onClick={(e) =>
+                                                        handleFraudCheckClick(
+                                                            e,
+                                                            order.customerPhone,
+                                                        )
+                                                    }
+                                                >
+                                                    <i className="fa-solid fa-user-shield"></i>
+                                                </button>
+                                                <button
+                                                    className="text-orange-500 hover:text-orange-700 text-lg p-1"
+                                                    title="Delete Order"
+                                                    onClick={(event) =>
+                                                        handleDeleteOrder(
+                                                            order.id,
+                                                            event,
+                                                        )
+                                                    }
+                                                >
+                                                    <i className="fa-solid fa-trash"></i>
+                                                </button>
+                                            </div>
                                         </div>
                                     </td>
                                 </tr>

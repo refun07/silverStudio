@@ -37,12 +37,7 @@ const ProductCardThemeOne = (props: Props) => {
     : translate("ADD TO CART");
 
   return (
-    <div
-      className={cn(
-        "product-card-theme-one relative flex flex-col group transition-all rounded-card overflow-hidden h-full border border-gray-100 bg-white",
-        props.borderless && "!border-0",
-      )}
-    >
+    <div className="product-card-theme-one relative flex flex-col group transition-all rounded-card overflow-hidden h-full border border-gray-100 bg-white">
       <div className="absolute top-5 left-5 flex flex-col items-start gap-2 z-[1]">
         {product.isPreOrder && product.preOrderData?.is_active ? (
           <ThemeLabel
@@ -153,8 +148,8 @@ const ProductCardThemeOne = (props: Props) => {
         <Button
           arrow={false}
           size="sm"
-          variant="link"
-          className="mt-3 min-h-11 w-full justify-center rounded-none border border-primary bg-white bg-none px-2 text-[11px] font-bold uppercase leading-none text-primary md:hidden disabled:opacity-60"
+          variant="primary"
+          className="mt-3 min-h-10 w-full justify-center rounded-none border border-primary px-2 text-[11px] font-bold uppercase leading-none text-white md:hidden disabled:opacity-60"
           onClick={handleAddToCart}
           isLoading={loading.gettingProduct || loading.addingToCart}
           disabled={cartDisabled}

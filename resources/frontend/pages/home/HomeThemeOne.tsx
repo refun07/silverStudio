@@ -1150,7 +1150,7 @@ const HomeThemeOne = () => {
                   {item.products.map((product) => (
                     <SwiperSlide key={product.id}>
                       <motion.div variants={itemAnimation}>
-                        <ProductCard product={product} borderless />
+                        <ProductCard product={product} />
                       </motion.div>
                     </SwiperSlide>
                   ))}

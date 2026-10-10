@@ -1,0 +1,67 @@
+User-agent: *
+Allow: /
+Disallow: /cart
+Disallow: /checkout
+Disallow: /login
+Disallow: /register
+Disallow: /signup
+Disallow: /account
+Disallow: /my-account
+Disallow: /profile
+Disallow: /orders
+Disallow: /order-confirmation
+Disallow: /thank-you
+Disallow: /wishlist
+Disallow: /forgot-password
+Disallow: /reset-password
+
+# Internal search results (thin, infinite)
+Disallow: /search
+Disallow: /*?q=
+Disallow: /*?query=
+Disallow: /*?s=
+
+# Sorting / filtering params (duplicate variants) — CONFIRM exact names live
+Disallow: /*?sort=
+Disallow: /*?order=
+Disallow: /*?filter=
+Disallow: /*?price_min=
+Disallow: /*?price_max=
+Disallow: /*?view=
+
+# Tracking / campaign params (FB Pixel + GTM are installed)
+Disallow: /*utm_
+Disallow: /*fbclid=
+Disallow: /*gclid=
+Disallow: /*msclkid=
+Disallow: /*ref=
+
+Disallow: /api/
+
+
+User-agent: GPTBot
+User-agent: OAI-SearchBot
+User-agent: ChatGPT-User
+User-agent: PerplexityBot
+User-agent: Perplexity-User
+User-agent: ClaudeBot
+User-agent: Claude-Web
+User-agent: Google-Extended
+User-agent: Applebot-Extended
+User-agent: Amazonbot
+Allow: /
+Disallow: /cart
+Disallow: /checkout
+Disallow: /account
+Disallow: /login
+Disallow: /api/
+
+
+# User-agent: MJ12bot
+# Disallow: /
+# User-agent: DotBot
+# Disallow: /
+# User-agent: PetalBot
+# Disallow: /
+
+Sitemap: https://silverstudiobd.com/sitemap.xml

@@ -1,24 +1,104 @@
-/node_modules/
-/vendor/
-/.env
-/.env.*
-!/.env.example
+# Laravel / Composer / Node
+/vendor
+/node_modules
+/demo.silverstudiobd.com/vendor
+/demo.silverstudiobd.com/node_modules
+.phpunit.cache
+.phpunit.result.cache
+Homestead.json
+Homestead.yaml
+auth.json
+npm-debug.log
+yarn-error.log
 
-/public/build/
-/deploy/
-/storage/logs/
-/storage/framework/
+# Env and secrets
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
 
+# Laravel runtime
+/public/hot
+/public/storage
+/public/uploads
+/storage/*.key
+/demo.silverstudiobd.com/public/hot
+/demo.silverstudiobd.com/public/storage
+/demo.silverstudiobd.com/public/uploads
+/demo.silverstudiobd.com/storage/*.key
+/demo.silverstudiobd.com/bootstrap/cache/*.php
+/demo.silverstudiobd.com/storage/framework/cache/data/*
+/demo.silverstudiobd.com/storage/framework/sessions/*
+/demo.silverstudiobd.com/storage/framework/views/*
+!/demo.silverstudiobd.com/storage/framework/**/.gitignore
+/demo.silverstudiobd.com/storage/logs/*.log
+/demo.silverstudiobd.com/storage/debugbar/*
+!/demo.silverstudiobd.com/storage/debugbar/.gitignore
+
+# Compiled Vite assets (rebuild with yarn build)
+/build
+/public/build
+/public_html/
+/demo.silverstudiobd.com/public/build
+/demo.silverstudiobd.com/public/public_html/
+
+# User-uploaded media
+/uploads/
+
+# cPanel / server-only
+error_log
+*.log
+php.ini
+.user.ini
+.htaccess.bak*
+cgi-bin/
+.well-known/
+
+# One-off cPanel deploy packages and leftover probes
 *.zip
-*.sql
-*.pem
-*.key
+__silver_*.php
+*.bak
+*.bak-*
 
-/__silver_cache_clear_*.php
-/__silver_log_tail_*.php
+# Database dumps (keep sql/ seed files)
+/demo.silverstudiobd.com/epikcart.sql
+/demo.silverstudiobd.com/epikcoders_epikcart.sql
 
+# Generated IDE helpers
+_ide_helper.php
+_ide_helper_models.php
+
+# OS / editor
 .DS_Store
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
+Thumbs.db
+.idea/
+.fleet/
+.vscode/
+*.swp
+
+# Local agent / tooling
+CLAUDE.md
+AGENTS.md
+.playwright-mcp
+.osgrep
+.opencode
+.commandcode/
+.zcode/
+Fraud-Checker-BD-Courier-main
+
+# Archive metadata and local automation state
+__MACOSX/
+._*
+.codex
+.agents/
+
+# Additional runtime data
+/demo.silverstudiobd.com/storage/app/*
+!/demo.silverstudiobd.com/storage/app/.gitignore
+!/demo.silverstudiobd.com/storage/app/public/
+/demo.silverstudiobd.com/storage/app/public/*
+!/demo.silverstudiobd.com/storage/app/public/.gitignore
+/demo.silverstudiobd.com/storage/framework/testing/*
+!/demo.silverstudiobd.com/storage/framework/testing/.gitignore

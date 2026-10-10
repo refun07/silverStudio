@@ -92,11 +92,6 @@ export const getCustomerFilter = async () => {
     return (await response.json()).result as ICustomer[];
 };
 
-export const searchCustomers = async (phone: string) => {
-    const response = await fetch(`${urlPrefix}/customers?phone=${encodeURIComponent(phone)}`);
-    return (await response.json()).result as ICustomer[];
-};
-
 export const getStates = async (countryId: number) => {
     const response = await fetch(`${urlPrefix}/get-states/${countryId}`);
     return (await response.json()).result as IState[];
