@@ -208,6 +208,7 @@ export interface ICategoryShort {
     id: number;
     name: string;
     slug: string;
+    description?: string | null;
     thumbnailImage: string;
     children_categories: ICategory[];
     productsCount: number;

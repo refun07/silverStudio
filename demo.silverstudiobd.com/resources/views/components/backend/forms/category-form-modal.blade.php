@@ -27,6 +27,9 @@
         <x-backend.inputs.number label="Sorting Priority Number" name="sorting_order_level"
             placeholder="Type sorting priority number" />
 
+        <x-backend.inputs.textarea rich="true" label="Category Page Description" name="description"
+            placeholder="Add the description shown on this category page" :isRequired="false" />
+
         <x-backend.inputs.select label="Filtering Variation Attributes" name="variation_ids[]" multiple
             data-selection-css-class="multi-select2"
             data-placeholder="{{ translate('Select variations as filter options') }}" class="" :isRequired="false">

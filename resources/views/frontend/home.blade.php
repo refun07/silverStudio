@@ -27,11 +27,24 @@
             : null;
         $gtmId = getSetting('googleTagManagerId') ?: config('services.gtm_id');
         $gtmId = preg_match('/^GTM-[A-Z0-9]+$/', strtoupper((string) $gtmId)) ? strtoupper($gtmId) : null;
+        $ga4MeasurementId = strtoupper((string) config('app.GA4_MEASUREMENT_ID'));
+        $ga4MeasurementId = preg_match('/^G-[A-Z0-9]+$/', $ga4MeasurementId) ? $ga4MeasurementId : null;
+        $ga4Enabled = config('app.GOOGLE_ANALYTICS_ACTIVATION') == '1';
         $siteName = getSetting('systemName') ?: config('app.name');
         $siteLogo = getSetting('websiteHeaderLogo') ? uploadedAsset(getSetting('websiteHeaderLogo')) : url('/favicon.png');
     @endphp
     @if ($googleSiteVerification)
         <meta name="google-site-verification" content="{{ $googleSiteVerification }}">
+    @endif
+
+    @if ($ga4Enabled && $ga4MeasurementId)
+        <script async src="https://www.googletagmanager.com/gtag/js?id={{ $ga4MeasurementId }}"></script>
+        <script>
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', '{{ $ga4MeasurementId }}');
+        </script>
     @endif
 
     <script type="application/ld+json">

@@ -45,6 +45,7 @@ return [
         'client_id'     => env('GOOGLE_CLIENT_ID'),
         'client_secret' => env('GOOGLE_CLIENT_SECRET'),
         'redirect'      => env('APP_URL') . '/social-login/google/callback',
+        'site_verification' => env('GOOGLE_SITE_VERIFICATION', 'TDwV5NxHmma_k8AN74Q26yT288zZvG725kLxQYFkmgg'),
     ],
 
     'facebook' => [

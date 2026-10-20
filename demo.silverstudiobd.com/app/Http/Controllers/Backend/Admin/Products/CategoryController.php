@@ -75,6 +75,7 @@ class CategoryController extends Controller
         $category->name                 = $request->name;
         $category->sorting_order_level  = 0;
         $category->thumbnail_image      = $request->thumbnail_image;
+        $category->description          = $request->description;
 
         if ($request->sorting_order_level != null) {
             $category->sorting_order_level = $request->sorting_order_level;
@@ -108,6 +109,7 @@ class CategoryController extends Controller
         $categoryTranslation                    = CategoryTranslation::firstOrNew(['lang_key' => config('app.default_language'), 'category_id' => $category->id]);
         $categoryTranslation->name              = $category->name;
         $categoryTranslation->thumbnail_image   = $request->thumbnail_image;
+        $categoryTranslation->description       = $request->description;
         $categoryTranslation->meta_title        = $category->meta_title;
         $categoryTranslation->meta_description  = $category->meta_description;
         $categoryTranslation->meta_keywords     = $category->meta_keywords;
@@ -167,6 +169,7 @@ class CategoryController extends Controller
         if ($request->lang_key == config("app.default_language")) {
             $category->name             = $request->name;
             $category->thumbnail_image  = $request->thumbnail_image;
+            $category->description      = $request->description;
 
             $category->slug = (!is_null($request->slug)) ? Str::slug($request->slug, '-') : Str::slug($request->name, '-');
             if ($request->sorting_order_level != null) {
@@ -201,6 +204,7 @@ class CategoryController extends Controller
         $categoryTranslation = CategoryTranslation::firstOrNew(['lang_key' => $request->lang_key, 'category_id' => $category->id]);
         $categoryTranslation->name              = $request->name;
         $categoryTranslation->thumbnail_image   = $request->thumbnail_image;
+        $categoryTranslation->description       = $request->description;
         $categoryTranslation->meta_title        = $request->meta_title;
         $categoryTranslation->meta_description  = $request->meta_description;
         $categoryTranslation->meta_keywords     = $request->meta_keywords;

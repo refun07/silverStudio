@@ -499,6 +499,16 @@ const SearchAndFilter = ({
                             scrollTo="#search-and-filter"
                         />
                     )}
+
+                    {categorySlug && selectedCategory?.description && (
+                        <section
+                            className="mt-10 rounded-lg bg-white p-5 sm:p-7 text-black/75 leading-7 [&_h1]:text-2xl [&_h1]:font-bold [&_h2]:text-xl [&_h2]:font-bold [&_h3]:text-lg [&_h3]:font-semibold [&_p]:mb-4 [&_ul]:mb-4 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:mb-4 [&_ol]:list-decimal [&_ol]:pl-6 [&_a]:text-primary [&_a]:underline"
+                            aria-label={`${selectedCategory.name} description`}
+                            dangerouslySetInnerHTML={{
+                                __html: selectedCategory.description,
+                            }}
+                        />
+                    )}
                 </div>
             </div>
         </>

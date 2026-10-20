@@ -37,6 +37,10 @@
         <x-backend.inputs.file label="Thumbnail Image" name="thumbnail_image" value="{{ $category?->thumbnail_image }}"
             filesHint="This image will be used as thumbnail of the category. Recommended size: 64*64" />
 
+        <x-backend.inputs.textarea rich="true" label="Category Page Description" name="description"
+            placeholder="Add the description shown on this category page"
+            value="{!! $category?->collectTranslation('description', $langKey) !!}" :isRequired="false" />
+
         <x-backend.inputs.text label="Meta Title" name="meta_title" placeholder="Type meta title"
             value="{{ $category?->collectTranslation('meta_title', $langKey) }}" :isRequired="false" aiGenerate="true" />
 

@@ -18,6 +18,7 @@ class CategoryResource extends JsonResource
             'id'                    => $this->id,
             'name'                  => $this->collectTranslation('name'),
             'slug'                  => $this->slug,
+            'description'           => $this->collectTranslation('description'),
             'thumbnailImage'        => uploadedAsset($this->thumbnail_image),
             'productsCount'         => $this->productCategories()->count(),
             'parent_category'       => CategoryResource::make($this->whenLoaded('parentCategory')),
